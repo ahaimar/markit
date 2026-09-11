@@ -1,0 +1,46 @@
+# Skeleton CD workflow.
+#
+# Triggered on every push to `main`. Until a real infrastructure target is
+# chosen, this just verifies the codebase can produce runnable images/native
+# artifacts. Point the deploy step at your target (SSH, GHCR + compose, etc.).
+#
+# Out-of-the-box options:
+#   - Publish each service jar to a central artifact store
+#     (actions/upload-artifact, or a maven repo).
+#   - Build and push OCI images to GHCR:
+#       docker build -f user-service/Dockerfile -t ghcr.io/<org>/markit-user-service:${GITHUB_SHA::7} .
+#     then let a compose/Helm manifest deploy them.
+#   - SSH into a host and run `docker compose up -d --build` (store secrets in
+#     GitHub Actions secrets).
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build deployable artifacts
+        run: ./gradlew bootJar --no-daemon
+
+      - name: Placeholder deploy step
+        run: |
+          echo "Deploy target not configured yet."
+          echo "Services built: $(ls */build/libs/*-0.0.1-SNAPSHOT.jar | wc -l)"
+          echo "Wire the real deploy step into .github/workflows/deploy.yml."

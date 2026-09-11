@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+**/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+gradle.properties
+local.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings
+
+# OS / docs / infra
+.DS_Store
+HELP.md
+docker/
+.github/

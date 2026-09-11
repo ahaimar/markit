@@ -1,0 +1,54 @@
+server:
+  port: 8083
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:h2:mem:orderdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: order_service
+  flyway:
+    create-schemas: true
+    schemas: order_service
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%X{requestId:-} %5p"
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:markit-dev-secret-key-change-me-in-production-0123456789}
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8082}
+  kafka:
+    order-events-topic: order-events
+  outbox:
+    publish-interval-ms: 3000

@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/markit
+    username: markit
+    password: markit
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    properties:
+      hibernate:
+        default_schema: notification_service
+  flyway:
+    create-schemas: true
+    schemas: notification_service
+  kafka:
+    bootstrap-servers: kafka:9092
