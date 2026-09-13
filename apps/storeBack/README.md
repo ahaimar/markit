@@ -16,9 +16,9 @@ A pragmatic microservices e-commerce backend: **6 services** (including a task t
 | `task-service`        | 8085 | Spring Boot + JPA — user-scoped task tracker (CRUD + status), no events |
 
 ### Runtime dependencies
-- **Kafka** (topics: `order-events`, `user-events`)
+- **Kafka** (topics: `order-events`, `user-events`, `product-events`)
 - **PostgreSQL** for the Docker/CD profile (each service gets its own schema); local profile uses **H2 in-memory** (MODE=PostgreSQL)
-- **Redis** runs in the stack but is **not wired into any service yet** (reserved for distributed caching)
+- Product reads are cached with an in-process **Caffeine** cache (`maximumSize=500`, 5min TTL) — a distributed cache can be added later
 
 ```
                     ┌─────────────────────────────────────────────────────────┐
@@ -84,7 +84,7 @@ docker compose up --build
 
 - Gateway: `http://localhost:8080`
 - Service health: `http://localhost:808x/actuator/health`
-- Kafka: `localhost:9092`, Postgres: `localhost:5432`, Redis: `localhost:6379`
+- Kafka: `localhost:29092`, Postgres: `localhost:5432`
 
 ## Quick start (curl)
 
@@ -156,7 +156,7 @@ Key environment variables (Docker profile defaults shown):
 | Variable | Default | Used by |
 |----------|---------|---------|
 | `JWT_SECRET` | dev secret | gateway + user-service |
-| `KAFKA_BOOTSTRAP` | `localhost:9092` | user/order/notification |
+| `KAFKA_BOOTSTRAP` | `localhost:29092` | user/product/order/notification |
 | `USER_SERVICE_URL`, `PRODUCT_SERVICE_URL`, `ORDER_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `TASK_SERVICE_URL` | `http://<svc>:808x` | gateway routing |
 | `RATE_LIMIT_PER_IP`, `RATE_LIMIT_PER_USER`, `RATE_LIMIT_WINDOW_SECONDS` | `100`, `1000`, `60` | gateway |
 | Postgres creds | `markit`/`markit` | Docker profile |

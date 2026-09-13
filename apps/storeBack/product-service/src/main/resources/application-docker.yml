@@ -11,3 +11,5 @@ spring:
   flyway:
     create-schemas: true
     schemas: product_service
+  kafka:
+    bootstrap-servers: kafka:9092
