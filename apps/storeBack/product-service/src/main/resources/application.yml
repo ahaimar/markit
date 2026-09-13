@@ -38,7 +38,16 @@ spring:
     create-schemas: true
     schemas: product_service
     locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 app:
   jwt:
     secret: ${JWT_SECRET:markit-dev-secret-key-change-me-in-production-0123456789}
+  kafka:
+    product-events-topic: product-events
+  outbox:
+    publish-interval-ms: 3000

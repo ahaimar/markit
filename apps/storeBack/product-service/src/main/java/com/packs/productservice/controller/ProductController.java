@@ -1,6 +1,7 @@
 package com.packs.productservice.controller;
 
 import com.packs.productservice.dto.ProductRequest;
+import com.packs.productservice.dto.SearchRequest;
 import com.packs.productservice.dto.StockDecrementRequest;
 import com.packs.productservice.service.ProductService;
 import com.packs.sharedlib.ApiException;
@@ -9,6 +10,7 @@ import com.packs.sharedlib.ProductDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,12 +50,35 @@ public class ProductController {
 		return ResponseEntity.ok(productService.getById(productId));
 	}
 
+	@PostMapping("/search")
+	public ResponseEntity<PageResponse<ProductDto>> search(@Valid @RequestBody SearchRequest request) {
+		return ResponseEntity.ok(productService.search(request));
+	}
+
 	@PostMapping
 	public ResponseEntity<ProductDto> create(
 		@RequestHeader(value = "X-User-Roles", required = false) String rolesHeader,
 		@Valid @RequestBody ProductRequest request) {
 		requireAdmin(rolesHeader);
 		return ResponseEntity.status(HttpStatus.CREATED).body(productService.create(request));
+	}
+
+	@PutMapping("/{productId}")
+	public ResponseEntity<ProductDto> update(
+		@RequestHeader(value = "X-User-Roles", required = false) String rolesHeader,
+		@PathVariable UUID productId,
+		@Valid @RequestBody ProductRequest request) {
+		requireAdmin(rolesHeader);
+		return ResponseEntity.ok(productService.update(productId, request));
+	}
+
+	@DeleteMapping("/{productId}")
+	public ResponseEntity<Void> delete(
+		@RequestHeader(value = "X-User-Roles", required = false) String rolesHeader,
+		@PathVariable UUID productId) {
+		requireAdmin(rolesHeader);
+		productService.delete(productId);
+		return ResponseEntity.noContent().build();
 	}
 
 	@PostMapping("/{productId}/stock/decrement")
