@@ -50,3 +50,5 @@ app:
       auth-uri: ${GOOGLE_OAUTH_AUTH_URI:https://accounts.google.com/o/oauth2/v2/auth}
   kafka:
     user-events-topic: user-events
+  outbox:
+    publish-interval-ms: 3000

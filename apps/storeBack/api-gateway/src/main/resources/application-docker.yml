@@ -38,6 +38,15 @@ spring:
               args:
                 name: notification-service
                 fallbackUri: forward:/fallback
+        - id: task-service
+          uri: ${TASK_SERVICE_URL:http://task-service:8085}
+          predicates:
+            - Path=/api/tasks/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: task-service
+                fallbackUri: forward:/fallback
 
 app:
   jwt:

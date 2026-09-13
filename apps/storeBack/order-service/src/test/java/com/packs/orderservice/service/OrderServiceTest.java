@@ -242,6 +242,29 @@ class OrderServiceTest {
 	}
 
 	@Test
+	void placeOrder_localPersistenceFails_compensatesAllDecrementedStock() {
+		UUID firstProduct = UUID.randomUUID();
+		UUID secondProduct = UUID.randomUUID();
+		when(cartRepository.findById(cartId)).thenReturn(Optional.of(cart(userId)));
+		when(cartItemRepository.findByCartId(cartId)).thenReturn(List.of(item(firstProduct, 1), item(secondProduct, 1)));
+		when(productClient.getProduct(firstProduct.toString()))
+			.thenReturn(new ProductDto(firstProduct.toString(), "A", "d", new BigDecimal("1.00"), "c", 5));
+		doNothing().when(productClient).decrementStock(firstProduct.toString(), new StockDecrementRequest(1));
+		when(productClient.getProduct(secondProduct.toString()))
+			.thenReturn(new ProductDto(secondProduct.toString(), "B", "d", new BigDecimal("2.00"), "c", 5));
+		doNothing().when(productClient).decrementStock(secondProduct.toString(), new StockDecrementRequest(1));
+		when(orderRepository.save(any(Order.class))).thenThrow(new RuntimeException("db down"));
+
+		RuntimeException ex = assertThrows(RuntimeException.class,
+			() -> orderService.placeOrder(new PlaceOrderRequest(cartId, "1 Main St"), userId, null));
+
+		assertEquals("db down", ex.getMessage());
+		verify(productClient).incrementStock(firstProduct.toString(), new StockDecrementRequest(1));
+		verify(productClient).incrementStock(secondProduct.toString(), new StockDecrementRequest(1));
+		verify(cartItemRepository, never()).deleteByCartId(cartId);
+	}
+
+	@Test
 	void updateStatus_validTransition_persistsStatusChangedOutbox() throws Exception {
 		Order order = orderInState(OrderStatus.PENDING, userId);
 		when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));

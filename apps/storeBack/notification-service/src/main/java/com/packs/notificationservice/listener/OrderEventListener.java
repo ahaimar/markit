@@ -26,25 +26,21 @@ public class OrderEventListener {
 
 	@KafkaListener(topics = "${app.kafka.order-events-topic:order-events}", groupId = "${spring.kafka.consumer.group-id:notification-service}")
 	public void onOrderEvent(String message) {
-		try {
-			JsonNode node = objectMapper.readTree(message);
-			if (node.has("fromStatus")) {
-				OrderStatusChangedEvent event = objectMapper.treeToValue(node, OrderStatusChangedEvent.class);
-				log.info("Consumed OrderStatusChanged event for order {} to {}", event.orderId(), event.toStatus());
-				notificationService.onOrderStatusChanged(event);
-			} else if (node.has("reason")) {
-				OrderCancelledEvent event = objectMapper.treeToValue(node, OrderCancelledEvent.class);
-				log.info("Consumed OrderCancelled event for order {}", event.orderId());
-				notificationService.onOrderCancelled(event);
-			} else if (node.has("totalPrice")) {
-				OrderCreatedEvent event = objectMapper.treeToValue(node, OrderCreatedEvent.class);
-				log.info("Consumed OrderCreated event for order {}", event.orderId());
-				notificationService.onOrderCreated(event);
-			} else {
-				log.info("Ignoring unrecognized order event: {}", message);
-			}
-		} catch (Exception ex) {
-			log.error("Failed to process order event message: {}", message, ex);
+		JsonNode node = objectMapper.readTree(message);
+		if (node.has("fromStatus")) {
+			OrderStatusChangedEvent event = objectMapper.treeToValue(node, OrderStatusChangedEvent.class);
+			log.info("Consumed OrderStatusChanged event for order {} to {}", event.orderId(), event.toStatus());
+			notificationService.onOrderStatusChanged(event);
+		} else if (node.has("reason")) {
+			OrderCancelledEvent event = objectMapper.treeToValue(node, OrderCancelledEvent.class);
+			log.info("Consumed OrderCancelled event for order {}", event.orderId());
+			notificationService.onOrderCancelled(event);
+		} else if (node.has("totalPrice")) {
+			OrderCreatedEvent event = objectMapper.treeToValue(node, OrderCreatedEvent.class);
+			log.info("Consumed OrderCreated event for order {}", event.orderId());
+			notificationService.onOrderCreated(event);
+		} else {
+			log.info("Ignoring unrecognized order event: {}", message);
 		}
 	}
 }

@@ -1,8 +1,0 @@
-rootProject.name = 'storeBack'
-
-include 'shared-lib'
-include 'user-service'
-include 'product-service'
-include 'order-service'
-include 'notification-service'
-include 'api-gateway'

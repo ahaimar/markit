@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+**/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+gradle.properties
+local.properties
+
+# Stale nested duplicate (removed from git; guard any clone that still has it)
+storeBack/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings
+
+# OS / docs / infra
+.DS_Store
+HELP.md
+README.md
+ARCHITECTURE.md
+improved_prompt.md
+IMPROVEMENTS_SUMMARY.md

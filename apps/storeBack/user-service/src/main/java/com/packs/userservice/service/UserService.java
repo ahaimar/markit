@@ -2,6 +2,7 @@ package com.packs.userservice.service;
 
 import com.packs.sharedlib.ApiException;
 import com.packs.sharedlib.JwtService;
+import com.packs.sharedlib.UserRegisteredEvent;
 import com.packs.userservice.dto.AuthResponse;
 import com.packs.userservice.dto.ChangePasswordRequest;
 import com.packs.userservice.dto.LoginRequest;
@@ -11,13 +12,18 @@ import com.packs.userservice.dto.UpdateProfileRequest;
 import com.packs.userservice.dto.UserResponse;
 import com.packs.userservice.entity.RefreshToken;
 import com.packs.userservice.entity.User;
-import com.packs.userservice.event.UserEventPublisher;
+import com.packs.userservice.entity.UserOutboxEvent;
 import com.packs.userservice.repository.RefreshTokenRepository;
+import com.packs.userservice.repository.UserOutboxEventRepository;
 import com.packs.userservice.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -30,6 +36,8 @@ import java.util.UUID;
 @Service
 public class UserService {
 
+	private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
 	private static final String EMAIL_TAKEN = "ERR_EMAIL_TAKEN";
 	private static final String INVALID_CREDENTIALS = "ERR_INVALID_CREDENTIALS";
 	private static final String USER_NOT_FOUND = "ERR_USER_NOT_FOUND";
@@ -39,19 +47,22 @@ public class UserService {
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final JwtService jwtService;
-	private final UserEventPublisher userEventPublisher;
+	private final UserOutboxEventRepository userOutboxEventRepository;
+	private final ObjectMapper objectMapper;
 
 	public UserService(
 		UserRepository userRepository,
 		RefreshTokenRepository refreshTokenRepository,
 		PasswordEncoder passwordEncoder,
 		JwtService jwtService,
-		UserEventPublisher userEventPublisher) {
+		UserOutboxEventRepository userOutboxEventRepository,
+		ObjectMapper objectMapper) {
 		this.userRepository = userRepository;
 		this.refreshTokenRepository = refreshTokenRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtService = jwtService;
-		this.userEventPublisher = userEventPublisher;
+		this.userOutboxEventRepository = userOutboxEventRepository;
+		this.objectMapper = objectMapper;
 	}
 
 	@Transactional
@@ -70,7 +81,7 @@ public class UserService {
 		user.setUpdatedAt(now);
 
 		User saved = userRepository.save(user);
-		userEventPublisher.userRegistered(saved.getId(), saved.getEmail(), saved.getName());
+		enqueueUserRegistered(saved.getId(), saved.getEmail(), saved.getName());
 		return issueTokens(saved);
 	}
 
@@ -207,9 +218,25 @@ public class UserService {
 			return userRepository.save(newUser);
 		});
 		if (created.get()) {
-			userEventPublisher.userRegistered(user.getId(), user.getEmail(), user.getName());
+			enqueueUserRegistered(user.getId(), user.getEmail(), user.getName());
 		}
 		return issueTokens(user);
+	}
+
+	private void enqueueUserRegistered(UUID userId, String email, String name) {
+		UUID eventId = UUID.randomUUID();
+		UserRegisteredEvent event = new UserRegisteredEvent(eventId.toString(), userId.toString(), email, name, Instant.now());
+		try {
+			UserOutboxEvent outbox = new UserOutboxEvent();
+			outbox.setEventType("UserRegistered");
+			outbox.setPayload(objectMapper.writeValueAsString(event));
+			outbox.setPublished(false);
+			outbox.setCreatedAt(Instant.now());
+			userOutboxEventRepository.save(outbox);
+			log.info("Enqueued UserRegistered outbox event for user {}", userId);
+		} catch (JacksonException ex) {
+			log.error("Failed to serialize UserRegistered event for user {}", userId, ex);
+		}
 	}
 
 	private User findActiveUser(UUID userId) {

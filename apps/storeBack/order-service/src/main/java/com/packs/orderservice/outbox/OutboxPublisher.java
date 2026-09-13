@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class OutboxPublisher {
@@ -34,7 +35,7 @@ public class OutboxPublisher {
 		List<OutboxEvent> events = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc();
 		for (OutboxEvent event : events) {
 			try {
-				kafkaTemplate.send(topic, event.getPayload()).get();
+				kafkaTemplate.send(topic, event.getPayload()).get(5, TimeUnit.SECONDS);
 				outboxEventRepository.markPublished(event.getId(), java.time.Instant.now());
 				log.info("Published outbox event id={} type={}", event.getId(), event.getEventType());
 			} catch (Exception ex) {

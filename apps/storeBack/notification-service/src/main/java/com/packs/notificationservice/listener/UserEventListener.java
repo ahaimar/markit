@@ -23,12 +23,8 @@ public class UserEventListener {
 
 	@KafkaListener(topics = "${app.kafka.user-events-topic:user-events}", groupId = "${spring.kafka.consumer.group-id:notification-service}")
 	public void onUserEvent(String message) {
-		try {
-			UserRegisteredEvent event = objectMapper.readValue(message, UserRegisteredEvent.class);
-			log.info("Consumed UserRegistered event for user {}", event.userId());
-			notificationService.onUserRegistered(event);
-		} catch (Exception ex) {
-			log.error("Failed to process user event message: {}", message, ex);
-		}
+		UserRegisteredEvent event = objectMapper.readValue(message, UserRegisteredEvent.class);
+		log.info("Consumed UserRegistered event for user {}", event.userId());
+		notificationService.onUserRegistered(event);
 	}
 }

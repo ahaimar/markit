@@ -125,56 +125,64 @@ public class OrderService {
 			}
 		} catch (RuntimeException ex) {
 			compensateStock(restocks);
+			restocks.clear();
 			throw ex;
 		}
 
-		Instant now = Instant.now();
-		Order order = new Order();
-		order.setUserId(userId);
-		order.setStatus(OrderStatus.PENDING.name());
-		order.setTotalPrice(totalPrice);
-		order.setShippingAddress(request.shippingAddress());
-		order.setCreatedAt(now);
-		order.setUpdatedAt(now);
-		Order saved = orderRepository.save(order);
-
-		for (OrderItem oi : orderItems) {
-			oi.setOrderId(saved.getId());
-			orderItemRepository.save(oi);
-		}
+		UUID eventId = UUID.randomUUID();
 
 		try {
-			OrderCreatedEvent event = new OrderCreatedEvent(saved.getId().toString(), userId.toString(), totalPrice, now);
-			OutboxEvent outbox = new OutboxEvent();
-			outbox.setEventType("OrderCreated");
-			outbox.setPayload(objectMapper.writeValueAsString(event));
-			outbox.setPublished(false);
-			outbox.setCreatedAt(now);
-			outboxEventRepository.save(outbox);
-			log.info("Saved outbox event OrderCreated for order {}", saved.getId());
-		} catch (JacksonException ex) {
-			log.error("Failed to serialize order event", ex);
-		}
+			Instant now = Instant.now();
+			Order order = new Order();
+			order.setUserId(userId);
+			order.setStatus(OrderStatus.PENDING.name());
+			order.setTotalPrice(totalPrice);
+			order.setShippingAddress(request.shippingAddress());
+			order.setCreatedAt(now);
+			order.setUpdatedAt(now);
+			Order saved = orderRepository.save(order);
 
-		cartItemRepository.deleteByCartId(cart.getId());
-
-		OrderDto result = getOrderDto(saved, orderItems);
-
-		if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-			try {
-				IdempotencyRecord record = new IdempotencyRecord();
-				record.setUserId(userId);
-				record.setIdempotencyKey(idempotencyKey);
-				record.setRequestHash(hash(request, userId));
-				record.setResponsePayload(objectMapper.writeValueAsString(result));
-				record.setCreatedAt(Instant.now());
-				idempotencyRecordRepository.save(record);
-			} catch (JacksonException ex) {
-				log.error("Failed to serialize idempotency response", ex);
+			for (OrderItem oi : orderItems) {
+				oi.setOrderId(saved.getId());
+				orderItemRepository.save(oi);
 			}
-		}
 
-		return result;
+			try {
+				OrderCreatedEvent event = new OrderCreatedEvent(eventId.toString(), saved.getId().toString(), userId.toString(), totalPrice, now);
+				OutboxEvent outbox = new OutboxEvent();
+				outbox.setEventType("OrderCreated");
+				outbox.setPayload(objectMapper.writeValueAsString(event));
+				outbox.setPublished(false);
+				outbox.setCreatedAt(now);
+				outboxEventRepository.save(outbox);
+				log.info("Saved outbox event OrderCreated for order {}", saved.getId());
+			} catch (JacksonException ex) {
+				log.error("Failed to serialize order event", ex);
+			}
+
+			cartItemRepository.deleteByCartId(cart.getId());
+
+			OrderDto result = getOrderDto(saved, orderItems);
+
+			if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+				try {
+					IdempotencyRecord record = new IdempotencyRecord();
+					record.setUserId(userId);
+					record.setIdempotencyKey(idempotencyKey);
+					record.setRequestHash(hash(request, userId));
+					record.setResponsePayload(objectMapper.writeValueAsString(result));
+					record.setCreatedAt(Instant.now());
+					idempotencyRecordRepository.save(record);
+				} catch (JacksonException ex) {
+					log.error("Failed to serialize idempotency response", ex);
+				}
+			}
+
+			return result;
+		} catch (RuntimeException ex) {
+			compensateStock(restocks);
+			throw ex;
+		}
 	}
 
 	private void compensateStock(List<Restock> restocks) {
@@ -251,9 +259,11 @@ public class OrderService {
 		order.setUpdatedAt(now);
 		orderRepository.save(order);
 
+		UUID eventId = UUID.randomUUID();
+
 		try {
 			if (newStatus == OrderStatus.CANCELLED) {
-				OrderCancelledEvent event = new OrderCancelledEvent(orderId.toString(), order.getUserId().toString(), order.getTotalPrice(), "Cancelled by admin", now);
+				OrderCancelledEvent event = new OrderCancelledEvent(eventId.toString(), orderId.toString(), order.getUserId().toString(), order.getTotalPrice(), "Cancelled by admin", now);
 				OutboxEvent outbox = new OutboxEvent();
 				outbox.setEventType("OrderCancelled");
 				outbox.setPayload(objectMapper.writeValueAsString(event));
@@ -262,7 +272,7 @@ public class OrderService {
 				outboxEventRepository.save(outbox);
 				log.info("Saved outbox event OrderCancelled for order {}", orderId);
 			} else {
-				OrderStatusChangedEvent event = new OrderStatusChangedEvent(orderId.toString(), order.getUserId().toString(), order.getTotalPrice(), oldStatusStr, newStatus.name(), now);
+				OrderStatusChangedEvent event = new OrderStatusChangedEvent(eventId.toString(), orderId.toString(), order.getUserId().toString(), order.getTotalPrice(), oldStatusStr, newStatus.name(), now);
 				OutboxEvent outbox = new OutboxEvent();
 				outbox.setEventType("OrderStatusChanged");
 				outbox.setPayload(objectMapper.writeValueAsString(event));

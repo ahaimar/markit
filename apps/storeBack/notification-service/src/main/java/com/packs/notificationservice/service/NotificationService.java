@@ -10,6 +10,7 @@ import com.packs.sharedlib.PageResponse;
 import com.packs.sharedlib.UserRegisteredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,7 +37,7 @@ public class NotificationService {
 		String subject = "Order " + event.orderId() + " confirmed";
 		String message = "We received your order " + event.orderId() + " for $" + event.totalPrice()
 			+ " placed at " + DateTimeFormatter.ISO_INSTANT.format(event.createdAt()) + ".";
-		return persist(event.orderId(), event.userId(), "EMAIL", subject, message);
+		return persist(event.eventId(), event.userId(), "EMAIL", subject, message);
 	}
 
 	@Transactional
@@ -44,7 +45,7 @@ public class NotificationService {
 		String subject = "Order " + event.orderId() + " is now " + event.toStatus();
 		String message = "Your order " + event.orderId() + " changed status from " + event.fromStatus()
 			+ " to " + event.toStatus() + " at " + DateTimeFormatter.ISO_INSTANT.format(event.changedAt()) + ".";
-		return persist(event.orderId(), event.userId(), "EMAIL", subject, message);
+		return persist(event.eventId(), event.userId(), "EMAIL", subject, message);
 	}
 
 	@Transactional
@@ -53,7 +54,7 @@ public class NotificationService {
 		String message = "Your order " + event.orderId() + " was cancelled"
 			+ (event.reason() != null && !event.reason().isBlank() ? " (" + event.reason() + ")" : "")
 			+ ". Any reserved amount will be refunded.";
-		return persist(event.orderId(), event.userId(), "EMAIL", subject, message);
+		return persist(event.eventId(), event.userId(), "EMAIL", subject, message);
 	}
 
 	@Transactional
@@ -61,10 +62,16 @@ public class NotificationService {
 		String subject = "Welcome to Markit!";
 		String message = "Welcome" + (event.name() != null && !event.name().isBlank() ? ", " + event.name() : "")
 			+ "! Your account with email " + event.email() + " has been created successfully.";
-		return persist(event.userId(), event.userId(), "EMAIL", subject, message);
+		return persist(event.eventId(), event.userId(), "EMAIL", subject, message);
 	}
 
 	private NotificationDto persist(String eventId, String recipient, String type, String subject, String message) {
+		Notification existing = notificationRepository.findByEventId(eventId).orElse(null);
+		if (existing != null) {
+			log.info("Duplicate event {} already processed, skipping", eventId);
+			return NotificationDto.from(existing);
+		}
+
 		Notification notification = new Notification();
 		notification.setEventId(eventId);
 		notification.setRecipient(recipient);
@@ -74,7 +81,16 @@ public class NotificationService {
 		notification.setMessage(message);
 		notification.setCreatedAt(Instant.now());
 
-		notificationRepository.save(notification);
+		try {
+			notificationRepository.saveInNewTransaction(notification);
+		} catch (DataIntegrityViolationException ex) {
+			Notification raced = notificationRepository.findByEventId(eventId).orElse(null);
+			if (raced == null) {
+				throw ex;
+			}
+			log.info("Concurrent duplicate event {} processed, skipping", eventId);
+			return NotificationDto.from(raced);
+		}
 
 		log.info("Email sent to user {}: {} (simulated)", recipient, subject);
 		return NotificationDto.from(notification);

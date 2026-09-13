@@ -36,7 +36,10 @@ class NotificationServiceTest {
 	void setUp() {
 		notificationService = new NotificationService(notificationRepository);
 		userId = UUID.randomUUID();
-		when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> {
+	}
+
+	private void stubSave() {
+		when(notificationRepository.saveInNewTransaction(any(Notification.class))).thenAnswer(invocation -> {
 			Notification n = invocation.getArgument(0);
 			n.setId(UUID.randomUUID());
 			return n;
@@ -45,20 +48,22 @@ class NotificationServiceTest {
 
 	@Test
 	void onOrderCreated_persistsEmailNotification() {
+		stubSave();
 		var dto = notificationService.onOrderCreated(
-			new OrderCreatedEvent(UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), Instant.now()));
+			new OrderCreatedEvent(UUID.randomUUID().toString(), UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), Instant.now()));
 
 		assertEquals("EMAIL", dto.type());
 		assertEquals("SENT", dto.status());
 		assertEquals(userId.toString(), dto.recipient());
 		assertTrue(dto.subject().contains("confirmed"));
-		verify(notificationRepository).save(any(Notification.class));
+		verify(notificationRepository).saveInNewTransaction(any(Notification.class));
 	}
 
 	@Test
 	void onOrderStatusChanged_subjectCarriesNewStatus() {
+		stubSave();
 		var dto = notificationService.onOrderStatusChanged(
-			new OrderStatusChangedEvent(UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), "CONFIRMED", "SHIPPED", Instant.now()));
+			new OrderStatusChangedEvent(UUID.randomUUID().toString(), UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), "CONFIRMED", "SHIPPED", Instant.now()));
 
 		assertEquals("SENT", dto.status());
 		assertTrue(dto.subject().contains("SHIPPED"));
@@ -67,8 +72,9 @@ class NotificationServiceTest {
 
 	@Test
 	void onOrderCancelled_subjectMarksCancellation() {
+		stubSave();
 		var dto = notificationService.onOrderCancelled(
-			new OrderCancelledEvent(UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), "Cancelled by admin", Instant.now()));
+			new OrderCancelledEvent(UUID.randomUUID().toString(), UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), "Cancelled by admin", Instant.now()));
 
 		assertTrue(dto.subject().contains("cancelled"));
 		assertTrue(dto.message().contains("Cancelled by admin"));
@@ -76,13 +82,28 @@ class NotificationServiceTest {
 
 	@Test
 	void onUserRegistered_welcomeEmailSent() {
+		stubSave();
 		var dto = notificationService.onUserRegistered(
-			new UserRegisteredEvent(userId.toString(), "user@example.com", "Alice", Instant.now()));
+			new UserRegisteredEvent(UUID.randomUUID().toString(), userId.toString(), "user@example.com", "Alice", Instant.now()));
 
 		assertEquals(userId.toString(), dto.recipient());
 		assertEquals("EMAIL", dto.type());
 		assertTrue(dto.subject().contains("Welcome"));
 		assertTrue(dto.message().contains("Alice"));
 		assertTrue(dto.message().contains("user@example.com"));
+	}
+
+	@Test
+	void duplicateEventId_skipsPersistAndReturnsExisting() {
+		Notification existing = new Notification();
+		existing.setId(UUID.randomUUID());
+		existing.setEventId("evt-123");
+		when(notificationRepository.findByEventId("evt-123")).thenReturn(java.util.Optional.of(existing));
+
+		var dto = notificationService.onOrderCreated(
+			new OrderCreatedEvent("evt-123", UUID.randomUUID().toString(), userId.toString(), new BigDecimal("37.00"), Instant.now()));
+
+		assertEquals(existing.getId().toString(), dto.id());
+		verify(notificationRepository, org.mockito.Mockito.never()).saveInNewTransaction(any(Notification.class));
 	}
 }
