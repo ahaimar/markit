@@ -46,6 +46,7 @@ A pragmatic microservices e-commerce backend: **6 services** (including a task t
 - **Async notifications**: order + user-registration events fan out to `notification-service`, with event dedup and DLQ handling.
 - **JWT propagation**: the gateway validates tokens and injects `X-User-Id` / `X-User-Roles`; downstream services enforce ownership and RBAC.
 - **Task tracker**: user-scoped CRUD for personal tasks (separate service, no event publishing).
+- **OpenAPI**: each service serves `springdoc` docs at `/swagger-ui.html` + `/v3/api-docs`; gateway paths `/v3/api-docs**` / `/swagger-ui/**` are public.
 
 ## Prerequisites
 

@@ -25,7 +25,10 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 		"/api/users/login",
 		"/api/users/refresh",
 		"/auth/oauth/google",
-		"/auth/oauth/google/callback"
+		"/auth/oauth/google/callback",
+		"/v3/api-docs/**",
+		"/swagger-ui.html",
+		"/swagger-ui/**"
 	);
 
 	public static final String REQUEST_ID_HEADER = "X-Request-Id";

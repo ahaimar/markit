@@ -37,7 +37,10 @@ public class SecurityConfig {
 					"/api/users/login",
 					"/api/users/refresh",
 					"/auth/oauth/google",
-					"/auth/oauth/google/callback"
+					"/auth/oauth/google/callback",
+					"/v3/api-docs/**",
+					"/swagger-ui.html",
+					"/swagger-ui/**"
 				).permitAll()
 				.anyRequest().authenticated())
 			.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
