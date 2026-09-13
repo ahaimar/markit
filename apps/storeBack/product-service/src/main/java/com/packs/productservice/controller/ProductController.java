@@ -2,11 +2,11 @@ package com.packs.productservice.controller;
 
 import com.packs.productservice.dto.ProductRequest;
 import com.packs.productservice.dto.SearchRequest;
-import com.packs.productservice.dto.StockDecrementRequest;
 import com.packs.productservice.service.ProductService;
 import com.packs.sharedlib.ApiException;
 import com.packs.sharedlib.PageResponse;
 import com.packs.sharedlib.ProductDto;
+import com.packs.sharedlib.StockDecrementRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,7 +1,7 @@
 package com.packs.orderservice.client;
 
-import com.packs.orderservice.dto.StockDecrementRequest;
 import com.packs.sharedlib.ProductDto;
+import com.packs.sharedlib.StockDecrementRequest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

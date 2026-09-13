@@ -40,9 +40,9 @@ A pragmatic microservices e-commerce backend: **6 services** (including a task t
 
 ## Architecture highlights
 
-- **Saga orchestration**: an order is created only after product stock is decremented; any failure triggers compensating stock restores.
+- **Saga orchestration**: an order is created only after product stock is decremented; any failure triggers compensating stock restores, and cancelling an order re-increments stock for every line item.
 - **Transactional Outbox**: both `order-events` and `user-events` are written to outbox tables in the same DB transaction as the write, then published to Kafka by polling publishers (crash-safe, no lost events).
-- **Idempotency**: duplicate/aged order requests are safe — keyed by `Idempotency-Key` header + cart hash + user.
+- **Idempotency**: duplicate/aged order requests are safe — keyed by `Idempotency-Key` header (or legacy `X-Idempotency-Key`) + cart hash + user; keys expire after a configurable TTL.
 - **Async notifications**: order + user-registration events fan out to `notification-service`, with event dedup and DLQ handling.
 - **JWT propagation**: the gateway validates tokens and injects `X-User-Id` / `X-User-Roles`; downstream services enforce ownership and RBAC.
 - **Task tracker**: user-scoped CRUD for personal tasks (separate service, no event publishing).
@@ -140,7 +140,7 @@ Need `jq` for the helpers above — or paste the JSON responses and extract ids 
 | `GET /api/products/{id}`, `PUT /api/products/{id}/stock`, `GET /api/products/{id}/stock` | GET public · rest ADMIN | |
 | `POST /api/products/{id}/stock/decrement` , `…/stock/increment` | internal | Used by `order-service` |
 | `POST /api/orders/cart/add` , `GET /api/orders/cart` , `POST /api/orders/cart/remove` , `POST /api/orders/cart/clear` | ✓ | Cart per user |
-| `POST /api/orders`         | ✓ | Place order (`Idempotency-Key` header optional) |
+| `POST /api/orders`         | ✓ | Place order (`Idempotency-Key` header optional, `X-Idempotency-Key` accepted as fallback) |
 | `GET /api/orders` , `GET /api/orders/{orderId}` | ✓ | Own orders (owner/ADMIN) |
 | `PUT /api/orders/{orderId}/status` | ADMIN | Cancellation triggers compensation |
 | `GET/POST /api/notifications`   | ✓ | `?page=&pageSize=&status=` |

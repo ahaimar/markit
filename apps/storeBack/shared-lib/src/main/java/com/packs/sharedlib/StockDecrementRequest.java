@@ -1,4 +1,4 @@
-package com.packs.productservice.dto;
+package com.packs.sharedlib;
 
 import jakarta.validation.constraints.Positive;
 

@@ -36,8 +36,10 @@ public class OrderController {
 	public ResponseEntity<OrderDto> placeOrder(
 		@RequestHeader("X-User-Id") UUID userId,
 		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+		@RequestHeader(value = "X-Idempotency-Key", required = false) String legacyIdempotencyKey,
 		@Valid @RequestBody PlaceOrderRequest request) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(orderService.placeOrder(request, userId, idempotencyKey));
+		String effectiveKey = (idempotencyKey != null && !idempotencyKey.isBlank()) ? idempotencyKey : legacyIdempotencyKey;
+		return ResponseEntity.status(HttpStatus.CREATED).body(orderService.placeOrder(request, userId, effectiveKey));
 	}
 
 	@GetMapping

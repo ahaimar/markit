@@ -6,7 +6,6 @@ import com.packs.orderservice.client.ProductClient;
 import com.packs.orderservice.dto.OrderDto;
 import com.packs.orderservice.dto.OrderItemDto;
 import com.packs.orderservice.dto.PlaceOrderRequest;
-import com.packs.orderservice.dto.StockDecrementRequest;
 import com.packs.orderservice.entity.Order;
 import com.packs.orderservice.entity.OrderItem;
 import com.packs.orderservice.entity.OutboxEvent;
@@ -25,8 +24,10 @@ import com.packs.sharedlib.OrderCreatedEvent;
 import com.packs.sharedlib.OrderStatus;
 import com.packs.sharedlib.OrderStatusChangedEvent;
 import com.packs.sharedlib.ProductDto;
+import com.packs.sharedlib.StockDecrementRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -53,6 +55,9 @@ public class OrderService {
 	private final IdempotencyRecordRepository idempotencyRecordRepository;
 	private final ProductClient productClient;
 	private final ObjectMapper objectMapper;
+
+	@Value("${app.idempotency.ttl-seconds:86400}")
+	private long idempotencyTtlSeconds = 86400;
 
 	public OrderService(
 		CartRepository cartRepository,
@@ -77,17 +82,22 @@ public class OrderService {
 	public OrderDto placeOrder(PlaceOrderRequest request, UUID userId, String idempotencyKey) {
 		if (idempotencyKey != null && !idempotencyKey.isBlank()) {
 			String requestHash = hash(request, userId);
-			java.util.Optional<IdempotencyRecord> existing = idempotencyRecordRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
+			Optional<IdempotencyRecord> existing = idempotencyRecordRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
 			if (existing.isPresent()) {
-				if (!existing.get().getRequestHash().equals(requestHash)) {
+				IdempotencyRecord record = existing.get();
+				if (isExpired(record)) {
+					log.info("Discarding expired idempotency record for key {}", idempotencyKey);
+					idempotencyRecordRepository.delete(record);
+				} else if (!record.getRequestHash().equals(requestHash)) {
 					throw new ApiException("ERR_IDEMPOTENCY_MISMATCH", "The same Idempotency-Key was used with a different request", HttpStatus.UNPROCESSABLE_ENTITY);
-				}
-				try {
-					log.info("Returning cached response for idempotency key {}", idempotencyKey);
-					return objectMapper.readValue(existing.get().getResponsePayload(), OrderDto.class);
-				} catch (JacksonException ex) {
-					log.error("Failed to deserialize cached idempotency response", ex);
-					throw new ApiException("ERR_IDEMPOTENCY_CACHE", "Failed to read cached response", HttpStatus.INTERNAL_SERVER_ERROR);
+				} else {
+					try {
+						log.info("Returning cached response for idempotency key {}", idempotencyKey);
+						return objectMapper.readValue(record.getResponsePayload(), OrderDto.class);
+					} catch (JacksonException ex) {
+						log.error("Failed to deserialize cached idempotency response", ex);
+						throw new ApiException("ERR_IDEMPOTENCY_CACHE", "Failed to read cached response", HttpStatus.INTERNAL_SERVER_ERROR);
+					}
 				}
 			}
 		}
@@ -172,6 +182,7 @@ public class OrderService {
 					record.setRequestHash(hash(request, userId));
 					record.setResponsePayload(objectMapper.writeValueAsString(result));
 					record.setCreatedAt(Instant.now());
+					record.setExpiresAt(record.getCreatedAt().plusSeconds(idempotencyTtlSeconds));
 					idempotencyRecordRepository.save(record);
 				} catch (JacksonException ex) {
 					log.error("Failed to serialize idempotency response", ex);
@@ -194,6 +205,21 @@ public class OrderService {
 				log.error("Failed to restore stock for product {} after order failure", restock.productId(), ex);
 			}
 		}
+	}
+
+	private void restoreStock(List<OrderItem> items) {
+		for (OrderItem item : items) {
+			try {
+				productClient.incrementStock(item.getProductId().toString(), new StockDecrementRequest(item.getQuantity()));
+				log.warn("Restored stock for cancelled order: {} units of product {}", item.getQuantity(), item.getProductId());
+			} catch (Exception ex) {
+				log.error("Failed to restore stock for product {} on cancellation; manual reconciliation required", item.getProductId(), ex);
+			}
+		}
+	}
+
+	private boolean isExpired(IdempotencyRecord record) {
+		return record.getExpiresAt() != null && record.getExpiresAt().isBefore(Instant.now());
 	}
 
 	private record Restock(UUID productId, int quantity) {
@@ -253,6 +279,11 @@ public class OrderService {
 			throw new ApiException("ERR_INVALID_TRANSITION", "Cannot transition order from " + currentStatus + " to " + newStatus, HttpStatus.CONFLICT);
 		}
 
+		List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+		if (newStatus == OrderStatus.CANCELLED) {
+			restoreStock(items);
+		}
+
 		Instant now = Instant.now();
 		String oldStatusStr = order.getStatus();
 		order.setStatus(newStatus.name());
@@ -285,7 +316,6 @@ public class OrderService {
 			log.error("Failed to serialize order status event", ex);
 		}
 
-		List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
 		return getOrderDto(order, items);
 	}
 

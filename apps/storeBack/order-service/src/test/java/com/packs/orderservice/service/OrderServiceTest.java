@@ -3,7 +3,6 @@ package com.packs.orderservice.service;
 import com.packs.orderservice.client.ProductClient;
 import com.packs.orderservice.dto.OrderDto;
 import com.packs.orderservice.dto.PlaceOrderRequest;
-import com.packs.orderservice.dto.StockDecrementRequest;
 import com.packs.orderservice.entity.Cart;
 import com.packs.orderservice.entity.CartItem;
 import com.packs.orderservice.entity.IdempotencyRecord;
@@ -19,6 +18,7 @@ import com.packs.orderservice.repository.OutboxEventRepository;
 import com.packs.sharedlib.ApiException;
 import com.packs.sharedlib.OrderStatus;
 import com.packs.sharedlib.ProductDto;
+import com.packs.sharedlib.StockDecrementRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -186,6 +186,29 @@ class OrderServiceTest {
 	}
 
 	@Test
+	void placeOrder_expiredIdempotencyRecord_isDiscardedAndReprocessed() throws Exception {
+		IdempotencyRecord record = new IdempotencyRecord();
+		record.setUserId(userId);
+		record.setIdempotencyKey("key-1");
+		record.setRequestHash(requestHash(new PlaceOrderRequest(cartId, "1 Main St")));
+		record.setResponsePayload("stale");
+		record.setExpiresAt(Instant.now().minusSeconds(60));
+		when(idempotencyRecordRepository.findByUserIdAndIdempotencyKey(userId, "key-1")).thenReturn(Optional.of(record));
+		when(cartRepository.findById(cartId)).thenReturn(Optional.of(cart(userId)));
+		when(cartItemRepository.findByCartId(cartId)).thenReturn(List.of(cartItem(1)));
+		when(productClient.getProduct(productId.toString()))
+			.thenReturn(new ProductDto(productId.toString(), "Ceramic Mug", "Stoneware", new BigDecimal("18.50"), "Mugs", 50));
+		mockOrderSave();
+
+		OrderDto result = orderService.placeOrder(new PlaceOrderRequest(cartId, "1 Main St"), userId, "key-1");
+
+		assertEquals("PENDING", result.status());
+		verify(idempotencyRecordRepository).delete(record);
+		verify(orderRepository).save(any(Order.class));
+		verify(idempotencyRecordRepository).save(any(IdempotencyRecord.class));
+	}
+
+	@Test
 	void placeOrder_idempotencyMismatch_throwsUnprocessable() {
 		IdempotencyRecord record = new IdempotencyRecord();
 		record.setUserId(userId);
@@ -282,6 +305,48 @@ class OrderServiceTest {
 		Order order = orderInState(OrderStatus.PENDING, userId);
 		when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 		when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of());
+
+		OrderDto result = orderService.updateStatus(orderId, "CANCELLED");
+
+		assertEquals("CANCELLED", result.status());
+		verify(orderRepository).save(order);
+		verify(outboxEventRepository).save(any(OutboxEvent.class));
+	}
+
+	@Test
+	void updateStatus_cancel_restoresStockForEachItem() {
+		Order order = orderInState(OrderStatus.CONFIRMED, userId);
+		UUID productA = UUID.randomUUID();
+		UUID productB = UUID.randomUUID();
+		com.packs.orderservice.entity.OrderItem a = new com.packs.orderservice.entity.OrderItem();
+		a.setProductId(productA);
+		a.setQuantity(2);
+		com.packs.orderservice.entity.OrderItem b = new com.packs.orderservice.entity.OrderItem();
+		b.setProductId(productB);
+		b.setQuantity(1);
+		when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+		when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(a, b));
+
+		OrderDto result = orderService.updateStatus(orderId, "CANCELLED");
+
+		assertEquals("CANCELLED", result.status());
+		verify(productClient).incrementStock(productA.toString(), new StockDecrementRequest(2));
+		verify(productClient).incrementStock(productB.toString(), new StockDecrementRequest(1));
+		verify(orderRepository).save(order);
+		verify(outboxEventRepository).save(any(OutboxEvent.class));
+	}
+
+	@Test
+	void updateStatus_cancel_stockRestoreFailureStillCancels() {
+		Order order = orderInState(OrderStatus.CONFIRMED, userId);
+		UUID productA = UUID.randomUUID();
+		com.packs.orderservice.entity.OrderItem a = new com.packs.orderservice.entity.OrderItem();
+		a.setProductId(productA);
+		a.setQuantity(3);
+		when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+		when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(a));
+		doThrow(new ApiException("ERR_PRODUCT_SERVICE_UNAVAILABLE", "down", HttpStatus.SERVICE_UNAVAILABLE))
+			.when(productClient).incrementStock(anyString(), any(StockDecrementRequest.class));
 
 		OrderDto result = orderService.updateStatus(orderId, "CANCELLED");
 

@@ -1,8 +1,8 @@
 package com.packs.orderservice.client;
 
-import com.packs.orderservice.dto.StockDecrementRequest;
 import com.packs.sharedlib.ApiException;
 import com.packs.sharedlib.ProductDto;
+import com.packs.sharedlib.StockDecrementRequest;
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
