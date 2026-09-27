@@ -5,7 +5,7 @@ spring:
         webflux:
           routes:
             - id: user-service
-              uri: ${USER_SERVICE_URL:http://user-service:8081}
+              uri: lb://user-service
               predicates:
                 - Path=/api/users/**
               filters:
@@ -14,7 +14,7 @@ spring:
                     name: user-service
                     fallbackUri: forward:/fallback
             - id: product-service
-              uri: ${PRODUCT_SERVICE_URL:http://product-service:8082}
+              uri: lb://product-service
               predicates:
                 - Path=/api/products/**
               filters:
@@ -23,7 +23,7 @@ spring:
                     name: product-service
                     fallbackUri: forward:/fallback
             - id: order-service
-              uri: ${ORDER_SERVICE_URL:http://order-service:8083}
+              uri: lb://order-service
               predicates:
                 - Path=/api/orders/**
               filters:
@@ -32,7 +32,7 @@ spring:
                     name: order-service
                     fallbackUri: forward:/fallback
             - id: notification-service
-              uri: ${NOTIFICATION_SERVICE_URL:http://notification-service:8084}
+              uri: lb://notification-service
               predicates:
                 - Path=/api/notifications/**
               filters:
@@ -41,7 +41,7 @@ spring:
                     name: notification-service
                     fallbackUri: forward:/fallback
             - id: task-service
-              uri: ${TASK_SERVICE_URL:http://task-service:8085}
+              uri: lb://task-service
               predicates:
                 - Path=/api/tasks/**
               filters:
@@ -49,6 +49,17 @@ spring:
                   args:
                     name: task-service
                     fallbackUri: forward:/fallback
+  data:
+    redis:
+      url: ${REDIS_URL:redis://redis:6379}
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://zipkin:9411/api/v2/spans}
 
 app:
   jwt:

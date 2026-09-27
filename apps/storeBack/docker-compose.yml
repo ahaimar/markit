@@ -1,5 +1,12 @@
-# Markit microservices stack: infrastructure + the six Spring Boot services.
-# Single-command start:  docker compose up --build  (gateway on http://localhost:8080)
+# Markit microservices stack: infrastructure + discovery + services + frontend.
+# Single-command start:  docker compose up --build  (nginx on https://localhost)
+#
+# Boot order (enforced by health checks):
+#   1. Databases & Brokers (postgres, kafka, redis, zipkin)
+#   2. Discovery (eureka)
+#   3. Monitoring (admin-server)
+#   4. Business microservices (user, product, order, notification, task)
+#   5. API Gateway + Frontend (nginx, web)
 services:
   postgres:
     image: postgres:16-alpine
@@ -43,25 +50,229 @@ services:
       timeout: 10s
       retries: 6
 
+  redis:
+    image: redis:7-alpine
+    container_name: markit-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - markit-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zipkin:
+    image: openzipkin/zipkin:3.4
+    container_name: markit-zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      STORAGE_TYPE: mem
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9411/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  discovery-server:
+    build:
+      context: .
+      dockerfile: discovery-server/Dockerfile
+    container_name: markit-discovery-server
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8761'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  admin-server:
+    build:
+      context: .
+      dockerfile: admin-server/Dockerfile
+    container_name: markit-admin-server
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8086'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: markit-user-service
+    expose:
+      - "8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
+      ADMIN_SEED_ENABLED: ${ADMIN_SEED_ENABLED:-true}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-admin@markit.com}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-admin}
+      GOOGLE_OAUTH_ENABLED: ${GOOGLE_OAUTH_ENABLED:-false}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:443/auth/oauth/google/callback}
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8081'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  product-service:
+    build:
+      context: .
+      dockerfile: product-service/Dockerfile
+    container_name: markit-product-service
+    expose:
+      - "8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8082'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    container_name: markit-order-service
+    expose:
+      - "8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
+      PRODUCT_SERVICE_URL: http://product-service:8082
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8083'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: markit-notification-service
+    expose:
+      - "8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8084'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  task-service:
+    build:
+      context: .
+      dockerfile: task-service/Dockerfile
+    container_name: markit-task-service
+    expose:
+      - "8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8085'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
   api-gateway:
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
     container_name: markit-api-gateway
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      ADMIN_URL: http://admin-server:8086
       JWT_SECRET: ${JWT_SECRET:-markit-dev-secret-key-change-me-in-production-0123456789}
       RATE_LIMIT_PER_IP: ${RATE_LIMIT_PER_IP:-100}
       RATE_LIMIT_PER_USER: ${RATE_LIMIT_PER_USER:-1000}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
-      USER_SERVICE_URL: http://user-service:8081
-      PRODUCT_SERVICE_URL: http://product-service:8082
-      ORDER_SERVICE_URL: http://order-service:8083
-      NOTIFICATION_SERVICE_URL: http://notification-service:8084
-      TASK_SERVICE_URL: http://task-service:8085
+      REDIS_URL: redis://redis:6379
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
     depends_on:
+      redis:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
       user-service:
         condition: service_healthy
       product-service:
@@ -79,113 +290,47 @@ services:
       retries: 6
       start_period: 30s
 
-  user-service:
+  web:
     build:
-      context: .
-      dockerfile: user-service/Dockerfile
-    container_name: markit-user-service
-    ports:
-      - "8081:8081"
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: markit-web
+    expose:
+      - "3000"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      ADMIN_SEED_ENABLED: ${ADMIN_SEED_ENABLED:-true}
-      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-admin@markit.com}
-      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-admin}
+      NEXT_PUBLIC_API_MODE: ${NEXT_PUBLIC_API_MODE:-live}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api-gateway:8080}
     depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
+      api-gateway:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8081'"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
       start_period: 30s
 
-  product-service:
+  nginx:
     build:
-      context: .
-      dockerfile: product-service/Dockerfile
-    container_name: markit-product-service
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: markit-nginx
     ports:
-      - "8082:8082"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
-      postgres:
+      api-gateway:
+        condition: service_healthy
+      web:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8082'"]
-      interval: 15s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
       timeout: 5s
-      retries: 6
-      start_period: 30s
-
-  order-service:
-    build:
-      context: .
-      dockerfile: order-service/Dockerfile
-    container_name: markit-order-service
-    ports:
-      - "8083:8083"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      product-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8083'"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: notification-service/Dockerfile
-    container_name: markit-notification-service
-    ports:
-      - "8084:8084"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8084'"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
-
-  task-service:
-    build:
-      context: .
-      dockerfile: task-service/Dockerfile
-    container_name: markit-task-service
-    ports:
-      - "8085:8085"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8085'"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
+      retries: 3
 
 volumes:
   markit-postgres-data:
+  markit-redis-data:

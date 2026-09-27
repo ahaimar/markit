@@ -10,6 +10,19 @@ management:
     health:
       probes:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
 
 logging:
   pattern:
@@ -18,6 +31,24 @@ logging:
 spring:
   application:
     name: user-service
+  boot:
+    admin:
+      client:
+        url: ${ADMIN_URL:http://localhost:8086}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+            client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+            scope: openid,email,profile
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+            user-name-attribute: sub
   datasource:
     url: jdbc:h2:mem:userdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
     username: sa
@@ -47,7 +78,7 @@ app:
   oauth:
     google:
       enabled: ${GOOGLE_OAUTH_ENABLED:false}
-      auth-uri: ${GOOGLE_OAUTH_AUTH_URI:https://accounts.google.com/o/oauth2/v2/auth}
+      redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://localhost:8080/auth/oauth/google/callback}
   kafka:
     user-events-topic: user-events
   outbox:

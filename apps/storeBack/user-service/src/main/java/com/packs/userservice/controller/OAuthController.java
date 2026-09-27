@@ -2,7 +2,7 @@ package com.packs.userservice.controller;
 
 import com.packs.sharedlib.ApiException;
 import com.packs.userservice.dto.AuthResponse;
-import com.packs.userservice.service.UserService;
+import com.packs.userservice.service.GoogleOAuthService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,32 +15,30 @@ import java.net.URI;
 @RestController
 public class OAuthController {
 
-	private final UserService userService;
-	private final boolean googleOauthEnabled;
-	private final String googleAuthUri;
+    private final GoogleOAuthService googleOAuthService;
+    private final boolean googleOauthEnabled;
 
-	public OAuthController(
-		UserService userService,
-		@Value("${app.oauth.google.enabled:false}") boolean googleOauthEnabled,
-		@Value("${app.oauth.google.auth-uri:https://accounts.google.com/o/oauth2/v2/auth}") String googleAuthUri) {
-		this.userService = userService;
-		this.googleOauthEnabled = googleOauthEnabled;
-		this.googleAuthUri = googleAuthUri;
-	}
+    public OAuthController(
+        GoogleOAuthService googleOAuthService,
+        @Value("${app.oauth.google.enabled:false}") boolean googleOauthEnabled) {
+        this.googleOAuthService = googleOAuthService;
+        this.googleOauthEnabled = googleOauthEnabled;
+    }
 
-	@GetMapping("/auth/oauth/google")
-	public ResponseEntity<Void> initiateGoogleLogin() {
-		if (!googleOauthEnabled) {
-			throw new ApiException("ERR_OAUTH_DISABLED", "Google OAuth is not enabled", HttpStatus.NOT_IMPLEMENTED);
-		}
-		return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(googleAuthUri)).build();
-	}
+    @GetMapping("/auth/oauth/google")
+    public ResponseEntity<Void> initiateGoogleLogin() {
+        if (!googleOauthEnabled) {
+            throw new ApiException("ERR_OAUTH_DISABLED", "Google OAuth is not enabled", HttpStatus.NOT_IMPLEMENTED);
+        }
+        String authUrl = googleOAuthService.getGoogleAuthUrl();
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(authUrl)).build();
+    }
 
-	@GetMapping("/auth/oauth/google/callback")
-	public ResponseEntity<AuthResponse> googleCallback(@RequestParam String code) {
-		if (!googleOauthEnabled) {
-			throw new ApiException("ERR_OAUTH_DISABLED", "Google OAuth is not enabled", HttpStatus.NOT_IMPLEMENTED);
-		}
-		return ResponseEntity.ok(userService.googleSignInStub(code));
-	}
+    @GetMapping("/auth/oauth/google/callback")
+    public ResponseEntity<AuthResponse> googleCallback(@RequestParam String code) {
+        if (!googleOauthEnabled) {
+            throw new ApiException("ERR_OAUTH_DISABLED", "Google OAuth is not enabled", HttpStatus.NOT_IMPLEMENTED);
+        }
+        return ResponseEntity.ok(googleOAuthService.handleCallback(code));
+    }
 }

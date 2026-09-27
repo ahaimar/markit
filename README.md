@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.svg" width="64" height="64" alt="Markit logo"></p>
+
 # Markit
 
 E-commerce monorepo — a Spring Boot microservices backend plus a Next.js storefront.
