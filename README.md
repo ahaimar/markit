@@ -1,49 +1,65 @@
-<p align="center"><img src="[def]" alt="Markit wordmark displayed as a clean, welcoming brand graphic for a specialty coffee and brewing equipment storefront; the image contains the text Markit on a simple background" style="display:block; width:100%; height:auto;"></p>
-
 # Markit
 
-E-commerce monorepo — a Spring Boot microservices backend plus a Next.js storefront for specialty coffee & brewing equipment.
+Markit is a specialty coffee and brewing equipment storefront built as a monorepo combining a Java/Spring Boot microservices backend with a Next.js storefront.
 
-## Layout
+## Overview
 
-| Path | What it is |
-|------|-----------|
-| `apps/storeBack/` | Backend: 6 Spring Boot services + Eureka discovery + Spring Boot Admin, Gradle multi-module build (`README.md`, `ARCHITECTURE.md`) |
-| `apps/web/` | Next.js 16 storefront — App Router, Tailwind CSS 4, Vitest (`README.md`) |
-| `docs/` | Static assets (icon) |
-| `TASKS.md` | Consolidated features, tasks, requirements, testing, deployment, and roadmap |
-| `00_start_here.md` | Onboarding / build planning guide |
-| Root `*.md` | Architecture decisions, delivery summaries, design docs |
+This repository brings together:
+
+- a resilient backend built with Spring Boot, Spring Cloud, Kafka, and PostgreSQL
+- a storefront built with Next.js, React, TypeScript, and Tailwind CSS
+- a full local Docker setup for running the stack together
+- supporting architecture and delivery documentation for onboarding and iteration
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `apps/storeBack/` | Java microservices backend, discovery, admin, and Gradle multi-module build |
+| `apps/web/` | Next.js storefront and frontend tests |
+| `docs/` | Static project assets |
+| `TASKS.md` | Feature backlog, requirements, deployment notes, and roadmap |
+| `00_start_here.md` | Setup and onboarding guidance |
+| Root `*.md` files | Architecture, delivery summaries, and design documents |
 
 ## Backend at a glance
 
-```
-api-gateway:8080 → user-service:8081, product-service:8082,
-                   order-service:8083, notification-service:8084, task-service:8085
-                   discovery-server:8761 (Eureka), admin-server:8086 (Spring Boot Admin)
+```text
+api-gateway:8080 -> user-service:8081, product-service:8082,
+                    order-service:8083, notification-service:8084, task-service:8085
+                    discovery-server:8761 (Eureka), admin-server:8086 (Spring Boot Admin)
 ```
 
-- Spring Boot 4.1.1 / Spring Cloud 2025.1.2, Java 21, Gradle 9.7.1
-- Saga orchestration + transactional outbox + idempotency for order integrity
-- Kafka events (`order-events`, `user-events`, `product-events`) consumed by notification-service
-- JWT auth at the gateway, admin RBAC, rate limiting, circuit breakers
-- Caffeine caching on product reads; Feign for inter-service calls
-- Local dev uses embedded H2 + Kafka in Docker; full stack via `docker compose up --build`
-- Per-service OpenAPI docs at `/swagger-ui.html` and `/v3/api-docs`
-- Zipkin tracing at `localhost:9411`, Admin UI at `localhost:8086`
+Key backend characteristics:
 
-See `apps/storeBack/README.md` for quick start, API surface, and env vars.
-See `apps/storeBack/ARCHITECTURE.md` for design decisions and trade-offs.
+- Java 21, Spring Boot 4.1.1, Spring Cloud 2025.1.2, Gradle 9.7.1
+- Saga orchestration with transactional outbox and idempotency for order integrity
+- Kafka event topics for `order-events`, `user-events`, and `product-events`
+- JWT authentication at the gateway with admin RBAC, rate limiting, and circuit breakers
+- Caffeine caching for product reads and Feign for service-to-service communication
+- Local development setup with embedded H2 and Kafka in Docker
+- OpenAPI documentation exposed per service at `/swagger-ui.html` and `/v3/api-docs`
+- Zipkin tracing on `localhost:9411` and Spring Boot Admin on `localhost:8086`
+
+For implementation details and service-level documentation, see:
+
+- `apps/storeBack/README.md`
+- `apps/storeBack/ARCHITECTURE.md`
 
 ## Frontend at a glance
 
-`apps/web/` is the Next.js storefront (App Router). It talks to the backend through a mock API by default; set `NEXT_PUBLIC_API_MODE=live` to point it at the gateway.
+The frontend is a Next.js App Router storefront that defaults to a mock API and can be switched to the live backend by setting the environment variables for the API mode.
+
+Highlights:
 
 - Next.js 16.3.4, React 19.2.8, TypeScript, Tailwind CSS 4
-- Pages: Home, Products, Product Detail, Cart, Checkout, Orders, Order Detail, Login, Register, Account, Tasks
-- Auth: React context + localStorage session persistence; mock/live API client swapped by factory
-- Tests: Vitest + Testing Library (13 test files)
-- Components: Navbar, Footer, ProductCard, RequireAuth, UI primitives (Button, Card, Badge, Field)
+- Pages for home, products, product detail, cart, checkout, orders, login, register, account, and tasks
+- Auth handled through React context with localStorage session persistence
+- Mock/live API client selection via a factory pattern
+- Vitest + Testing Library with coverage across the UI and hooks
+- Reusable UI primitives such as Button, Card, Badge, and Field
+
+### Frontend commands
 
 ```bash
 cd apps/web
@@ -53,25 +69,39 @@ npm run test       # Vitest
 npm run typecheck  # tsc --noEmit
 ```
 
-Set `NEXT_PUBLIC_API_MODE=live` and `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local` for live mode.
+Set the following in `.env.local` to use the live backend:
 
-## Full stack (Docker)
+```bash
+NEXT_PUBLIC_API_MODE=live
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+```
+
+## Full-stack Docker startup
+
+From the backend folder:
 
 ```bash
 cd apps/storeBack
 docker compose up --build
 ```
 
+Runtime endpoints:
+
 - Gateway: `http://localhost:8080`
-- Web: `http://localhost:3000` (proxied via nginx on HTTPS `https://localhost`)
-- Admin: `http://localhost:8086` · Zipkin: `http://localhost:9411`
-- Kafka: `localhost:29092` · Postgres: `localhost:5432` · Redis: `localhost:6379`
+- Web app: `http://localhost:3000` (served via nginx and HTTPS at `https://localhost`)
+- Admin UI: `http://localhost:8086`
+- Zipkin: `http://localhost:9411`
+- Kafka: `localhost:29092`
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
 
-Boot order is enforced by health checks: infra → discovery → services → gateway → web → nginx.
+The startup order is enforced with health checks: infra → discovery → services → gateway → web → nginx.
 
-## Quick start (local dev)
+## Quick start
 
-**Backend** — start Kafka, then each service:
+### Backend
+
+Start Kafka and launch the Java services:
 
 ```bash
 cd apps/storeBack
@@ -84,33 +114,40 @@ docker compose up -d kafka
 ./gradlew :task-service:bootRun
 ```
 
-**Frontend**:
+### Frontend
 
 ```bash
 cd apps/web
 npm install && npm run dev
 ```
 
-All requests go through the gateway at `http://localhost:8080`. Bootstrap admin: `admin@markit.com` / `admin`.
+All application traffic is routed through the gateway at `http://localhost:8080`.
+
+### Bootstrap admin credentials
+
+- Email: `admin@markit.com`
+- Password: `admin`
 
 ## Testing
 
 | Suite | Command | Location |
 |-------|---------|----------|
-| Frontend unit | `npm run test` | `apps/web/` (Vitest + Testing Library) |
-| Backend unit | `./gradlew test` | `apps/storeBack/` (JUnit 5) |
+| Frontend unit tests | `npm run test` | `apps/web/` |
+| Backend unit tests | `./gradlew test` | `apps/storeBack/` |
 
-## Documentation
+## Documentation map
 
-| Doc | Purpose |
-|-----|---------|
-| `apps/storeBack/README.md` | Backend quick start, API surface, env vars |
-| `apps/storeBack/ARCHITECTURE.md` | Backend design decisions, event flows, security |
-| `apps/web/README.md` | Frontend getting started |
-| `00_start_here.md` | Repo onboarding / build planning |
-| `Enhanced_requirements.md` | Product requirements |
-| `Monorepo_structure.md` | Monorepo design rationale |
-| `Ui architecture_guide.md` | Frontend architecture decisions |
+| Document | Purpose |
+|----------|---------|
+| `apps/storeBack/README.md` | Backend quick start, API overview, and environment variables |
+| `apps/storeBack/ARCHITECTURE.md` | Design decisions, event flow, and security architecture |
+| `apps/web/README.md` | Frontend setup and local usage |
+| `00_start_here.md` | Repo onboarding and build planning |
+| `TASKS.md` | Delivery roadmap, product requirements, and task tracking |
+| `Enhanced_requirements.md` | Product and engineering requirements |
+| `Monorepo_structure.md` | Monorepo rationale |
+| `Ui architecture_guide.md` | Frontend architecture guidance |
 
+## Summary
 
-[def]: ocs/dev.gn
+Markit is designed as a realistic, product-oriented monorepo for learning and shipping a distributed commerce application end-to-end. It balances modern frontend UX with event-driven backend patterns and operational tooling so the project is useful both as a demo and as a strong foundation for further extension.
