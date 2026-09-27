@@ -126,6 +126,10 @@ curl -s -X POST $GW/api/tasks -H "Authorization: Bearer $TOKEN" \
 
 Need `jq` for the helpers above — or paste the JSON responses and extract ids manually.
 
+> On first start, `user-service` seeds a bootstrap admin (`admin@markit.com` / `admin`
+> by default) so product creation and order-status changes work immediately. Disable
+> it (`ADMIN_SEED_ENABLED=false`) or change the password before going live.
+
 ## API surface (via gateway)
 
 | Method & Path              | Auth | Notes |
@@ -160,6 +164,7 @@ Key environment variables (Docker profile defaults shown):
 | `KAFKA_BOOTSTRAP` | `localhost:29092` | user/product/order/notification |
 | `USER_SERVICE_URL`, `PRODUCT_SERVICE_URL`, `ORDER_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `TASK_SERVICE_URL` | `http://<svc>:808x` | gateway routing |
 | `RATE_LIMIT_PER_IP`, `RATE_LIMIT_PER_USER`, `RATE_LIMIT_WINDOW_SECONDS` | `100`, `1000`, `60` | gateway |
+| `ADMIN_SEED_ENABLED`, `ADMIN_SEED_EMAIL`, `ADMIN_SEED_PASSWORD` | `true`, `admin@markit.com`, `admin` | user-service |
 | Postgres creds | `markit`/`markit` | Docker profile |
 
 See `ARCHITECTURE.md` for design decisions, event flows, security, and trade-offs.

@@ -52,3 +52,7 @@ app:
     user-events-topic: user-events
   outbox:
     publish-interval-ms: 3000
+  admin-seed:
+    enabled: ${ADMIN_SEED_ENABLED:true}
+    email: ${ADMIN_SEED_EMAIL:admin@markit.com}
+    password: ${ADMIN_SEED_PASSWORD:admin}

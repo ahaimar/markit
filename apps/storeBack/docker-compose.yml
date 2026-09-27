@@ -88,6 +88,9 @@ services:
       - "8081:8081"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      ADMIN_SEED_ENABLED: ${ADMIN_SEED_ENABLED:-true}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-admin@markit.com}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-admin}
     depends_on:
       postgres:
         condition: service_healthy

@@ -13,3 +13,9 @@ spring:
     schemas: user_service
   kafka:
     bootstrap-servers: kafka:9092
+
+app:
+  admin-seed:
+    enabled: ${ADMIN_SEED_ENABLED:true}
+    email: ${ADMIN_SEED_EMAIL:admin@markit.com}
+    password: ${ADMIN_SEED_PASSWORD:admin}

@@ -16,59 +16,61 @@ spring:
     name: api-gateway
   cloud:
     gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins:
-              - ${CORS_ORIGINS:http://localhost:3000}
-            allowedMethods: "*"
-            allowedHeaders: "*"
-      routes:
-        - id: user-service
-          uri: ${USER_SERVICE_URL:http://localhost:8081}
-          predicates:
-            - Path=/api/users/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: user-service
-                fallbackUri: forward:/fallback
-        - id: product-service
-          uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
-          predicates:
-            - Path=/api/products/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: product-service
-                fallbackUri: forward:/fallback
-        - id: order-service
-          uri: ${ORDER_SERVICE_URL:http://localhost:8083}
-          predicates:
-            - Path=/api/orders/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: order-service
-                fallbackUri: forward:/fallback
-        - id: notification-service
-          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8084}
-          predicates:
-            - Path=/api/notifications/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: notification-service
-                fallbackUri: forward:/fallback
-        - id: task-service
-          uri: ${TASK_SERVICE_URL:http://localhost:8085}
-          predicates:
-            - Path=/api/tasks/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: task-service
-                fallbackUri: forward:/fallback
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - ${CORS_ORIGINS:http://localhost:3000}
+                allowedMethods: "*"
+                allowedHeaders: "*"
+          routes:
+            - id: user-service
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: user-service
+                    fallbackUri: forward:/fallback
+            - id: product-service
+              uri: ${PRODUCT_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/products/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: product-service
+                    fallbackUri: forward:/fallback
+            - id: order-service
+              uri: ${ORDER_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/orders/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: order-service
+                    fallbackUri: forward:/fallback
+            - id: notification-service
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/notifications/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: notification-service
+                    fallbackUri: forward:/fallback
+            - id: task-service
+              uri: ${TASK_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/tasks/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: task-service
+                    fallbackUri: forward:/fallback
 
 app:
   jwt:
