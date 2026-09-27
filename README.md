@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/icon.svg" width="64" height="64" alt="Markit logo"></p>
+<p align="center"><img src="[def]" alt="Markit wordmark displayed as a clean, welcoming brand graphic for a specialty coffee and brewing equipment storefront; the image contains the text Markit on a simple background" style="display:block; width:100%; height:auto;"></p>
 
 # Markit
 
@@ -11,8 +11,9 @@ E-commerce monorepo — a Spring Boot microservices backend plus a Next.js store
 | `apps/storeBack/` | Backend: 6 Spring Boot services + Eureka discovery + Spring Boot Admin, Gradle multi-module build (`README.md`, `ARCHITECTURE.md`) |
 | `apps/web/` | Next.js 16 storefront — App Router, Tailwind CSS 4, Vitest (`README.md`) |
 | `docs/` | Static assets (icon) |
+| `TASKS.md` | Consolidated features, tasks, requirements, testing, deployment, and roadmap |
 | `00_start_here.md` | Onboarding / build planning guide |
-| Root `*.md` | Requirements, architecture decisions, delivery summaries |
+| Root `*.md` | Architecture decisions, delivery summaries, design docs |
 
 ## Backend at a glance
 
@@ -110,3 +111,6 @@ All requests go through the gateway at `http://localhost:8080`. Bootstrap admin:
 | `Enhanced_requirements.md` | Product requirements |
 | `Monorepo_structure.md` | Monorepo design rationale |
 | `Ui architecture_guide.md` | Frontend architecture decisions |
+
+
+[def]: ocs/dev.gn

@@ -10,3 +10,14 @@
 .gradle/
 **/build/
 out/
+
+# --- Logs ---
+*.log
+
+# --- Temporary files ---
+*.tmp
+
+# --- Others ---
+*.swp
+.env
+.env.**
