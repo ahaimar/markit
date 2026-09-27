@@ -31,4 +31,4 @@ and `apps/storeBack/ARCHITECTURE.md` for design decisions and trade-offs.
 ## Frontend
 
 `apps/web/` is the Next.js storefront. It talks to the backend through a mock API by
-default; `NEXT_PUBLIC_API_MODE=live` points it at the gateway.
+default; `NEXT_PUBLIC_API_MODE=live` points it at the gateway.# Markit_oo
